@@ -3,12 +3,12 @@
 
 services:
   - type: web
-    name: document-rag-backend
+    name: document-rag
     env: python
-    root: backend
+    root: .
     branch: main
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    startCommand: bash start.sh
     autoDeploy: true
     envVars:
       - key: HUGGINGFACE_API_TOKEN
@@ -16,20 +16,10 @@ services:
       - key: QDRANT_URL
       - key: QDRANT_API_KEY
       - key: GOOGLE_API_KEY
+      - key: BACKEND_URL
     diskMounts:
       - mountPath: /opt/render/project/backend/uploads
         name: backend-data
-
-  - type: web
-    name: document-rag-frontend
-    env: python
-    root: frontend
-    branch: main
-    buildCommand: pip install -r requirements.txt
-    startCommand: streamlit run frontend/app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true
-    autoDeploy: true
-    envVars:
-      - key: BACKEND_URL
 
 persistentDisks:
   - name: backend-data
