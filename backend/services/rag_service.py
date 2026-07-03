@@ -1,11 +1,14 @@
 from services.embedding import generate_query_embedding
-from services.chroma_service import client
+from services.qdrant_service import client
 from services.gemini_service import generate_answer
 
 ACTIVE_COLLECTION = None
 
 
 def set_active_collection(collection_name):
+    """
+    Store the active Qdrant collection.
+    """
     global ACTIVE_COLLECTION
     ACTIVE_COLLECTION = collection_name
 
@@ -15,131 +18,109 @@ def ask_question(question: str):
     question = question.strip()
 
     if not question:
-        return "Please enter a valid question."
+        return {
+            "answer": "Please enter a valid question.",
+            "suggestions": []
+        }
 
     user_input = question.lower()
 
-    # -------------------------------------
+    # -----------------------------
     # Greetings
-    # -------------------------------------
-    greetings = (
+    # -----------------------------
+    greetings = [
         "hi",
         "hello",
         "hey",
         "good morning",
         "good afternoon",
         "good evening",
-        "hola",
-        "hi there",
-        "hello there"
-    )
+        "hola"
+    ]
 
-    if user_input.startswith(greetings):
-        return (
-            "Hello! 👋\n\n"
-            "Welcome to the **Document RAG Chatbot**.\n\n"
-            "📄 Upload a PDF, DOCX or TXT file and I'll answer questions using only the uploaded document."
-        )
+    if any(greet == user_input for greet in greetings):
+        return {
+            "answer":
+                "Hello! 👋\n\n"
+                "Welcome to the Document RAG Chatbot.\n\n"
+                "Upload a PDF, DOCX, or TXT document and ask me questions about it.",
+            "suggestions": []
+        }
 
-    # -------------------------------------
-    # How are you
-    # -------------------------------------
-    if "how are you" in user_input:
-        return (
-            "I'm doing great! 😊\n\n"
-            "I'm ready to help you understand your uploaded documents."
-        )
-
-    # -------------------------------------
-    # Who are you
-    # -------------------------------------
-    if (
-        "who are you" in user_input
-        or "what are you" in user_input
-    ):
-        return (
-            "I'm a **Document Retrieval-Augmented Generation (RAG) Chatbot**.\n\n"
-            "I can answer questions based only on the document you upload."
-        )
-
-    # -------------------------------------
-    # Help
-    # -------------------------------------
-    if user_input in ["help", "commands"]:
-
-        return (
-            "**I can help you with:**\n\n"
-            "• Greeting 😊\n"
-            "• Answering questions from your uploaded PDF\n"
-            "• Summarizing the document\n"
-            "• Explaining document content\n"
-            "• Finding information from the document\n\n"
-            "Upload a document and start asking questions!"
-        )
-
-    # -------------------------------------
-    # Thanks
-    # -------------------------------------
-    thanks = (
+    # -----------------------------
+    # Thank You
+    # -----------------------------
+    thanks = [
         "thanks",
         "thank you",
         "thankyou",
         "thank u"
-    )
+    ]
 
-    if user_input.startswith(thanks):
-        return (
-            "You're welcome! 😊\n\n"
-            "Feel free to ask another question."
-        )
+    if any(word == user_input for word in thanks):
+        return {
+            "answer":
+                "You're welcome! 😊\n\nFeel free to ask another question.",
+            "suggestions": []
+        }
 
-    # -------------------------------------
+    # -----------------------------
     # Goodbye
-    # -------------------------------------
-    goodbye = (
+    # -----------------------------
+    goodbye = [
         "bye",
         "goodbye",
         "see you",
         "exit"
-    )
+    ]
 
-    if user_input.startswith(goodbye):
-        return (
-            "Goodbye! 👋\n\n"
-            "Thank you for using the Document RAG Chatbot.\n"
-            "Have a wonderful day!"
-        )
+    if any(word == user_input for word in goodbye):
+        return {
+            "answer":
+                "Goodbye! 👋\n\nHave a wonderful day.",
+            "suggestions": []
+        }
 
-    # -------------------------------------
-    # Check document
-    # -------------------------------------
+    # -----------------------------
+    # Check Document Upload
+    # -----------------------------
     if ACTIVE_COLLECTION is None:
-        return (
-            "📄 Please upload a document first.\n\n"
-            "After uploading, I'll answer questions based on that document."
-        )
+        return {
+            "answer": "Please upload a document first.",
+            "suggestions": []
+        }
 
-    # -------------------------------------
-    # Load collection
-    # -------------------------------------
+    # -----------------------------
+    # Get Collection
+    # -----------------------------
     try:
+
         collection = client.get_collection(ACTIVE_COLLECTION)
 
     except Exception:
-        return "Unable to access the uploaded document."
 
-    # -------------------------------------
-    # Generate embedding
-    # -------------------------------------
+        return {
+            "answer": "Unable to access the uploaded document.",
+            "suggestions": []
+        }
+
+    # -----------------------------
+    # Generate Query Embedding
+    # -----------------------------
     try:
+
         query_embedding = generate_query_embedding(question)
 
     except Exception:
-        return "Failed to generate query embedding."
 
-    # -------------------------------------
-    # Retrieve relevant chunks
-    # -------------------------------------
+        return {
+            "answer": "Failed to generate query embedding.",
+            "suggestions": []
+        }
+
+    # -----------------------------
+    # Search ChromaDB
+    # -----------------------------
     try:
 
         results = collection.query(
@@ -149,30 +130,41 @@ def ask_question(question: str):
 
     except Exception:
 
-        return "Failed to search the document."
+        return {
+            "answer": "Failed to search the document.",
+            "suggestions": []
+        }
 
     documents = results.get("documents", [[]])[0]
 
     if not documents:
 
-        return (
-            "The uploaded document does not contain enough information to answer this question."
-        )
+        return {
+            "answer":
+                "The uploaded document does not contain enough information to answer this question.",
+            "suggestions": []
+        }
 
-    context = "\n\n".join(documents)
+    # -----------------------------
+    # Build Context
+    # -----------------------------
+    context = "\n\n".join(documents[:5])
 
-    # -------------------------------------
-    # Gemini
-    # -------------------------------------
+    # -----------------------------
+    # Generate Gemini Answer
+    # -----------------------------
     try:
 
-        answer = generate_answer(
-            context=context,
-            question=question
+        response = generate_answer(
+            context,
+            question
         )
+
+        return response
 
     except Exception as e:
 
-        return f"Failed to generate answer.\n\n{e}"
-
-    return answer
+        return {
+            "answer": f"Failed to generate answer: {str(e)}",
+            "suggestions": []
+        }

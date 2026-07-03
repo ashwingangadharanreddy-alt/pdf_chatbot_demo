@@ -23,7 +23,8 @@ def chat(request: ChatRequest):
 
     try:
 
-        answer = ask_question(question)
+        # Ask the RAG pipeline
+        result = ask_question(question)
 
         processing_time = (
             datetime.now() - start_time
@@ -32,7 +33,8 @@ def chat(request: ChatRequest):
         return {
             "success": True,
             "question": question,
-            "answer": answer,
+            "answer": result["answer"],
+            "suggestions": result["suggestions"],
             "processing_time": round(processing_time, 2)
         }
 

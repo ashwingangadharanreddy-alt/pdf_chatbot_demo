@@ -21,15 +21,14 @@ st.title("🤖 Document RAG Chatbot")
 # -------------------------------------------------
 # Session State
 # -------------------------------------------------
+
 if "messages" not in st.session_state:
     st.session_state.messages = [
         {
             "role": "assistant",
-            "content": (
+            "content":
                 "Hello! 👋 Welcome to the Document RAG Chatbot.\n\n"
-                "You can greet me anytime.\n"
-                "Upload a PDF, DOCX or TXT file and ask questions about it."
-            )
+                "Upload a PDF, DOCX or TXT document and ask me anything about it."
         }
     ]
 
@@ -42,6 +41,17 @@ if "document_name" not in st.session_state:
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
+# NEW
+if "suggestions" not in st.session_state:
+    st.session_state.suggestions = []
+
+# NEW
+if "selected_question" not in st.session_state:
+    st.session_state.selected_question = None
+
+# NEW
+if "processing_time" not in st.session_state:
+    st.session_state.processing_time = None
 # -------------------------------------------------
 # Sidebar
 # -------------------------------------------------
@@ -49,34 +59,36 @@ with st.sidebar:
 
     st.header("📄 Document RAG")
 
-    # -----------------------------
+    # ----------------------------------
     # Clear Chat
-    # -----------------------------
+    # ----------------------------------
     if st.button("🗑️ Clear Chat"):
 
         st.session_state.messages = [
             {
                 "role": "assistant",
-                "content": (
+                "content":
                     "Hello! 👋 Welcome to the Document RAG Chatbot.\n\n"
-                    "Upload a PDF, DOCX or TXT file and ask questions about it."
-                )
+                    "Upload a PDF, DOCX or TXT file and ask me questions."
             }
         ]
 
         st.session_state.chat_history = []
+        st.session_state.suggestions = []
+        st.session_state.selected_question = None
+        st.session_state.processing_time = None
 
         st.rerun()
 
     st.divider()
 
-    # -----------------------------
+    # ----------------------------------
     # Upload Document
-    # -----------------------------
+    # ----------------------------------
     st.subheader("📄 Upload Document")
 
     uploaded_file = st.file_uploader(
-        "Choose a PDF, TXT or DOCX file",
+        "Choose a PDF, DOCX or TXT file",
         type=["pdf", "txt", "docx"]
     )
 
@@ -87,11 +99,12 @@ with st.sidebar:
             st.warning("Please select a document.")
 
         elif (
-            st.session_state.document_name == uploaded_file.name
-            and st.session_state.document_uploaded
+            st.session_state.document_uploaded
+            and
+            uploaded_file.name == st.session_state.document_name
         ):
 
-            st.info("This document is already uploaded.")
+            st.info("This document has already been uploaded.")
 
         else:
 
@@ -110,7 +123,7 @@ with st.sidebar:
                     response = requests.post(
                         f"{API_URL}/upload",
                         files=files,
-                        timeout=60
+                        timeout=120
                     )
 
                     if response.status_code == 200:
@@ -121,6 +134,8 @@ with st.sidebar:
 
                         st.session_state.document_uploaded = True
                         st.session_state.document_name = uploaded_file.name
+
+                        st.session_state.suggestions = []
 
                     else:
 
@@ -134,27 +149,30 @@ with st.sidebar:
                 except requests.exceptions.ConnectionError:
 
                     st.error(
-                        "❌ Cannot connect to the FastAPI backend."
+                        "Cannot connect to FastAPI."
                     )
 
                 except requests.exceptions.Timeout:
 
                     st.error(
-                        "⌛ Upload timed out."
+                        "Upload timed out."
                     )
 
                 except Exception as e:
 
                     st.error(str(e))
 
-    # -----------------------------
+    st.divider()
+
+    # ----------------------------------
     # Current Document
-    # -----------------------------
+    # ----------------------------------
+    st.subheader("📄 Current Document")
+
     if st.session_state.document_uploaded:
 
         st.success(
-            f"📄 Current Document\n\n"
-            f"**{st.session_state.document_name}**"
+            st.session_state.document_name
         )
 
     else:
@@ -163,9 +181,9 @@ with st.sidebar:
 
     st.divider()
 
-    # -----------------------------
+    # ----------------------------------
     # Chat History
-    # -----------------------------
+    # ----------------------------------
     st.subheader("💬 Chat History")
 
     if len(st.session_state.chat_history) == 0:
@@ -174,37 +192,75 @@ with st.sidebar:
 
     else:
 
-        for chat in reversed(st.session_state.chat_history):
+        for chat in reversed(
+            st.session_state.chat_history
+        ):
 
             with st.expander(chat["time"]):
 
                 st.markdown(
-                    f"**👤 Question:**\n\n{chat['question']}"
+                    f"**👤 Question**\n\n{chat['question']}"
                 )
 
                 st.markdown(
-                    f"**🤖 Answer:**\n\n{chat['answer']}"
+                    f"**🤖 Answer**\n\n{chat['answer']}"
                 )
-
 # -------------------------------------------------
 # Display Previous Messages
 # -------------------------------------------------
-for message in st.session_state.messages:
+
+for index, message in enumerate(st.session_state.messages):
 
     with st.chat_message(message["role"]):
 
         st.markdown(message["content"])
-        # -------------------------------------------------
+
+        # ------------------------------------------
+        # Display Suggestions Below Assistant Message
+        # ------------------------------------------
+        if (
+            message["role"] == "assistant"
+            and "suggestions" in message
+            and len(message["suggestions"]) > 0
+        ):
+
+            st.markdown("### 💡 Related Questions")
+
+            for i, suggestion in enumerate(message["suggestions"]):
+
+                if st.button(
+                    suggestion,
+                    key=f"suggestion_{index}_{i}"
+                ):
+
+                    st.session_state.selected_question = suggestion
+                    st.rerun()
+# -------------------------------------------------
 # Chat Input
 # -------------------------------------------------
-question = st.chat_input("💬 Type your message...")
 
+user_input = st.chat_input("💬 Type your message...")
+
+# If a suggestion button was clicked,
+# use that as the next question.
+if st.session_state.selected_question:
+
+    question = st.session_state.selected_question
+
+    st.session_state.selected_question = None
+
+else:
+
+    question = user_input
 # -------------------------------------------------
 # Chat
 # -------------------------------------------------
+
 if question:
 
-    # Display user message
+    # --------------------------------------------
+    # User Message
+    # --------------------------------------------
     st.session_state.messages.append(
         {
             "role": "user",
@@ -215,7 +271,9 @@ if question:
     with st.chat_message("user"):
         st.markdown(question)
 
-    # Assistant response
+    # --------------------------------------------
+    # Assistant Message
+    # --------------------------------------------
     with st.chat_message("assistant"):
 
         with st.spinner("Thinking..."):
@@ -227,21 +285,27 @@ if question:
                     json={
                         "question": question
                     },
-                    timeout=60
+                    timeout=120
                 )
 
                 if response.status_code == 200:
 
                     data = response.json()
 
-                    answer = data["answer"]
+                    answer = data.get(
+                        "answer",
+                        "No answer returned."
+                    )
 
-                    # Optional: Show processing time if backend returns it
-                    if "processing_time" in data:
-                        st.caption(
-                            f"⏱ Response generated in "
-                            f"{data['processing_time']} seconds"
-                        )
+                    suggestions = data.get(
+                        "suggestions",
+                        []
+                    )
+
+                    processing_time = data.get(
+                        "processing_time",
+                        None
+                    )
 
                 else:
 
@@ -250,35 +314,86 @@ if question:
                         "Unexpected server error."
                     )
 
+                    suggestions = []
+
+                    processing_time = None
+
             except requests.exceptions.ConnectionError:
 
                 answer = (
-                    "❌ Unable to connect to the FastAPI backend.\n\n"
-                    "Make sure the backend server is running."
+                    "❌ Unable to connect to FastAPI backend."
                 )
+
+                suggestions = []
+
+                processing_time = None
 
             except requests.exceptions.Timeout:
 
                 answer = "⌛ Request timed out."
 
+                suggestions = []
+
+                processing_time = None
+
             except Exception as e:
 
-                answer = f"Unexpected Error:\n\n{str(e)}"
+                answer = str(e)
 
+                suggestions = []
+
+                processing_time = None
+
+            # ------------------------------------
+            # Show Answer
+            # ------------------------------------
             st.markdown(answer)
 
-    # Save assistant message
+            # ------------------------------------
+            # Response Time
+            # ------------------------------------
+            if processing_time is not None:
+
+                st.caption(
+                    f"⏱ Generated in {processing_time} sec"
+                )
+
+            # ------------------------------------
+            # Suggested Questions
+            # ------------------------------------
+            if suggestions:
+
+                st.markdown("### 💡 Related Questions")
+
+                for i, suggestion in enumerate(suggestions):
+
+                    if st.button(
+                        suggestion,
+                        key=f"new_{len(st.session_state.messages)}_{i}"
+                    ):
+
+                        st.session_state.selected_question = suggestion
+                        st.rerun()
+
+    # --------------------------------------------
+    # Save Assistant Message
+    # --------------------------------------------
     st.session_state.messages.append(
         {
             "role": "assistant",
-            "content": answer
+            "content": answer,
+            "suggestions": suggestions
         }
     )
 
-    # Save chat history
+    # --------------------------------------------
+    # Save Chat History
+    # --------------------------------------------
     st.session_state.chat_history.append(
         {
-            "time": datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
+            "time": datetime.now().strftime(
+                "%d-%m-%Y %H:%M:%S"
+            ),
             "question": question,
             "answer": answer
         }

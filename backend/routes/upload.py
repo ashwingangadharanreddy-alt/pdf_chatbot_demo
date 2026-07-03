@@ -6,7 +6,7 @@ from datetime import datetime
 from services.pdf_reader import extract_text
 from services.text_splitter import split_text
 from services.embedding import generate_embeddings
-from services.chroma_service import create_collection, store_embeddings
+from services.qdrant_service import create_collection, store_embeddings
 from services.rag_service import set_active_collection
 
 router = APIRouter(tags=["Upload"])
@@ -88,24 +88,24 @@ async def upload_document(file: UploadFile = File(...)):
         # Generate embeddings
         embeddings = generate_embeddings(chunks)
 
-        # Create Chroma collection
-        collection = create_collection()
+        # Create Qdrant collection
+        collection_name = create_collection()
 
         # Store vectors
         store_embeddings(
-            collection,
+            collection_name,
             chunks,
             embeddings
         )
 
         # Set active collection
-        set_active_collection(collection.name)
+        set_active_collection(collection_name)
 
         return {
             "success": True,
             "message": "Document uploaded and indexed successfully.",
             "filename": filename,
-            "collection": collection.name,
+            "collection": collection_name,
             "chunks": len(chunks),
             "characters": len(text)
         }
