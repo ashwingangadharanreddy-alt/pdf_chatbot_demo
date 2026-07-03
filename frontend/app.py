@@ -1,11 +1,12 @@
 import streamlit as st
 import requests
+import os
 from datetime import datetime
 
 # -------------------------------------------------
-# FastAPI Backend URL
+# FastAPI Backend URL (use BACKEND_URL env var in Render)
 # -------------------------------------------------
-API_URL = "http://127.0.0.1:8000"
+API_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:8000")
 
 # -------------------------------------------------
 # Page Configuration
