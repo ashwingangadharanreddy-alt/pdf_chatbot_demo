@@ -25,8 +25,8 @@ services:
     env: python
     root: frontend
     branch: main
-    buildCommand: pip install -r ../backend/requirements.txt
-    startCommand: streamlit run app.py --server.port $PORT --server.address 0.0.0.0
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run frontend/app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true
     autoDeploy: true
     envVars:
       - key: BACKEND_URL
