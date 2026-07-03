@@ -1,9 +1,6 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException
-import os
-import shutil
-from datetime import datetime
 
-from services.pdf_reader import extract_text
+from services.pdf_reader_stream import extract_text_bytes
 from services.text_splitter import split_text
 from services.embedding import generate_embeddings
 from services.qdrant_service import create_collection, store_embeddings
@@ -14,9 +11,6 @@ router = APIRouter(tags=["Upload"])
 # ----------------------------------------
 # Configuration
 # ----------------------------------------
-UPLOAD_FOLDER = "uploads"
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
 ALLOWED_EXTENSIONS = {"pdf", "txt", "docx"}
 
 MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
@@ -49,26 +43,8 @@ async def upload_document(file: UploadFile = File(...)):
             detail="File size exceeds 20 MB."
         )
 
-    # Reset pointer after reading
-    file.file.seek(0)
-
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-    filename = f"{timestamp}_{file.filename}"
-
-    filepath = os.path.join(
-        UPLOAD_FOLDER,
-        filename
-    )
-
     try:
-
-        # Save uploaded file
-        with open(filepath, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-
-        # Extract text
-        text = extract_text(filepath)
+        text = extract_text_bytes(file.filename, contents)
 
         if not text.strip():
             raise HTTPException(
@@ -104,7 +80,6 @@ async def upload_document(file: UploadFile = File(...)):
         return {
             "success": True,
             "message": "Document uploaded and indexed successfully.",
-            "filename": filename,
             "collection": collection_name,
             "chunks": len(chunks),
             "characters": len(text)
@@ -114,10 +89,6 @@ async def upload_document(file: UploadFile = File(...)):
         raise
 
     except Exception as e:
-
-        if os.path.exists(filepath):
-            os.remove(filepath)
-
         raise HTTPException(
             status_code=500,
             detail=f"Upload failed: {str(e)}"
